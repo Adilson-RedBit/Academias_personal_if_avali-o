@@ -42,6 +42,135 @@ const PHOTO_STEPS = [
 ];
 
 // ==========================================
+// VALIDAÇÕES DE ENTRADA
+// ==========================================
+
+/**
+ * Valida dados do usuário
+ * @returns {Object} {valid: boolean, errors: string[]}
+ */
+function validateUserData() {
+    const errors = [];
+    
+    const height = parseFloat(document.getElementById('height').value);
+    const weight = parseFloat(document.getElementById('weight').value);
+    const age = parseFloat(document.getElementById('age').value);
+    const gender = document.getElementById('gender').value;
+    
+    if (!height || isNaN(height) || height < 100 || height > 250) {
+        errors.push('⚠️ Altura deve estar entre 100-250cm');
+    }
+    
+    if (!weight || isNaN(weight) || weight < 30 || weight > 300) {
+        errors.push('⚠️ Peso deve estar entre 30-300kg');
+    }
+    
+    if (!age || isNaN(age) || age < 13 || age > 120) {
+        errors.push('⚠️ Idade deve estar entre 13-120 anos');
+    }
+    
+    if (!gender || !['male', 'female'].includes(gender)) {
+        errors.push('⚠️ Selecione um gênero válido');
+    }
+    
+    // Verificar se todas as fotos foram capturadas
+    if (!AppState.photos.front || !AppState.photos.back || 
+        !AppState.photos.sideLeft || !AppState.photos.sideRight) {
+        errors.push('⚠️ Todas as 4 fotos são obrigatórias');
+    }
+    
+    return {
+        valid: errors.length === 0,
+        errors: errors
+    };
+}
+
+/**
+ * Valida arquivo de foto
+ * @param {File} file - Arquivo de imagem
+ * @returns {Object} {valid: boolean, error: string}
+ */
+function validatePhotoFile(file) {
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    
+    if (!file) {
+        return { valid: false, error: 'Nenhuma imagem selecionada' };
+    }
+    
+    if (!validTypes.includes(file.type)) {
+        return { 
+            valid: false, 
+            error: `⚠️ Formato inválido. Use JPEG, PNG ou WebP (recebido: ${file.type})` 
+        };
+    }
+    
+    if (file.size > maxSize) {
+        const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+        return { 
+            valid: false, 
+            error: `⚠️ Imagem muito grande (${sizeMB}MB). Máximo: 5MB` 
+        };
+    }
+    
+    return { valid: true };
+}
+
+/**
+ * Mostra mensagem de erro na tela
+ * @param {string} message - Mensagem a exibir
+ */
+function showErrorMessage(message) {
+    const errorContainer = document.getElementById('error-message');
+    if (errorContainer) {
+        errorContainer.innerHTML = `<div class="error-alert">❌ ${message}</div>`;
+        errorContainer.style.display = 'block';
+        
+        // Auto-hide após 5 segundos
+        setTimeout(() => {
+            errorContainer.style.display = 'none';
+        }, 5000);
+    }
+}
+
+/**
+ * Mostra mensagens de múltiplos erros
+ * @param {string[]} errors - Array de mensagens
+ */
+function showErrorMessages(errors) {
+    const errorContainer = document.getElementById('error-message');
+    if (errorContainer) {
+        const html = '<div class="error-alert">' + 
+                     errors.map(e => `<div>• ${e}</div>`).join('') + 
+                     '</div>';
+        errorContainer.innerHTML = html;
+        errorContainer.style.display = 'block';
+        
+        // Auto-hide após 7 segundos
+        setTimeout(() => {
+            errorContainer.style.display = 'none';
+        }, 7000);
+    }
+}
+
+/**
+ * Mostra mensagem de sucesso
+ * @param {string} message - Mensagem a exibir
+ */
+function showSuccessMessage(message) {
+    const successContainer = document.getElementById('success-message');
+    if (successContainer) {
+        successContainer.innerHTML = `<div class="success-alert">✅ ${message}</div>`;
+        successContainer.style.display = 'block';
+        
+        // Auto-hide após 3 segundos
+        setTimeout(() => {
+            successContainer.style.display = 'none';
+        }, 3000);
+    }
+}
+
+// ==========================================
 // NAVEGAÇÃO ENTRE TELAS
 // ==========================================
 function goToScreen(screenId) {
@@ -175,10 +304,89 @@ document.addEventListener('DOMContentLoaded', () => {
             goal: document.getElementById('input-goal').value
         };
 
+        // VALIDAÇÃO - FASE 1
+        const validation = validateUserData();
+        if (!validation.valid) {
+            showErrorMessages(validation.errors);
+            return;
+        }
+
         // Simular análise (mostrar loading e depois resultados)
         showLoadingAndAnalyze();
     });
+    
+    // Setup para captura de fotos com validação - FASE 1
+    setupPhotoCapture();
 });
+
+/**
+ * Setup de captura de fotos com validação
+ */
+function setupPhotoCapture() {
+    const photoInput = document.getElementById('photo-input');
+    
+    if (photoInput) {
+        photoInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            
+            if (!file) return;
+            
+            // VALIDAÇÃO - FASE 1
+            const validation = validatePhotoFile(file);
+            if (!validation.valid) {
+                showErrorMessage(validation.error);
+                this.value = ''; // Limpar input
+                return;
+            }
+            
+            // Processar foto válida
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const photoId = PHOTO_STEPS[AppState.currentPhotoStep].id;
+                AppState.photos[photoId] = event.target.result;
+                
+                // Feedback visual
+                showSuccessMessage(`✓ Foto ${AppState.currentPhotoStep + 1}/4 capturada com sucesso!`);
+                updatePhotoIndicator(AppState.currentPhotoStep, true);
+                
+                // Avançar para próxima foto
+                setTimeout(() => {
+                    AppState.currentPhotoStep++;
+                    if (AppState.currentPhotoStep < PHOTO_STEPS.length) {
+                        updatePhotoStep();
+                    } else {
+                        // Todas as fotos capturadas
+                        showSuccessMessage('🎉 Todas as fotos foram capturadas!');
+                        goToScreen('complementary-data-screen');
+                    }
+                }, 1000);
+            };
+            
+            reader.onerror = function() {
+                showErrorMessage('❌ Erro ao ler arquivo. Tente novamente.');
+            };
+            
+            reader.readAsDataURL(file);
+            
+            // Limpar input para permitir selecionar mesmo arquivo novamente
+            this.value = '';
+        });
+    }
+}
+
+/**
+ * Atualizar indicador visual de foto capturada
+ */
+function updatePhotoIndicator(photoIndex, captured) {
+    const step = PHOTO_STEPS[photoIndex];
+    const stepEl = document.getElementById(step.stepElement);
+    
+    if (stepEl) {
+        if (captured) {
+            stepEl.classList.add('completed');
+        }
+    }
+}
 
 function showLoadingAndAnalyze() {
     // Simulação de processamento

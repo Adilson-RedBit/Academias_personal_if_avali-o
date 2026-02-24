@@ -796,6 +796,51 @@ body {
 }
 
 /* ==========================================
+   MENSAGENS DE ERRO/SUCESSO - FASE 1
+   ========================================== */
+.error-alert {
+    background: rgba(239, 68, 68, 0.1);
+    border: 2px solid var(--danger-color);
+    border-radius: var(--border-radius);
+    padding: calc(var(--spacing-unit) * 2.5);
+    color: #FCA5A5;
+    font-weight: 500;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    animation: slideDown 0.3s ease-out;
+}
+
+.error-alert div {
+    margin: calc(var(--spacing-unit) * 0.5) 0;
+}
+
+.error-alert div:first-child {
+    margin-top: 0;
+}
+
+.success-alert {
+    background: rgba(16, 185, 129, 0.1);
+    border: 2px solid var(--secondary-color);
+    border-radius: var(--border-radius);
+    padding: calc(var(--spacing-unit) * 2.5);
+    color: #86EFAC;
+    font-weight: 500;
+    font-size: 0.95rem;
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ==========================================
    RESPONSIVIDADE
    ========================================== */
 @media (max-width: 480px) {
@@ -813,5 +858,12 @@ body {
 
     .benefits {
         grid-template-columns: 1fr;
+    }
+    
+    .error-alert,
+    .success-alert {
+        margin: 0;
+        font-size: 0.85rem;
+        padding: calc(var(--spacing-unit) * 2);
     }
 }
