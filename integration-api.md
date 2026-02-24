@@ -206,6 +206,97 @@ function startAuthenticatedAssessment(user) {
 }
 ```
 
+## 💾 Persistência de Dados (FASE 2 - localStorage Seguro)
+
+O módulo agora salva automaticamente o progresso da avaliação usando localStorage com prefixo seguro.
+
+### Chaves de Storage
+
+```javascript
+STORAGE_KEYS = {
+    appState: "assessment_state",           // Estado completo
+    userData: "assessment_user",            // Dados do usuário
+    analysisResults: "assessment_results",  // Resultados da análise
+    lastSaved: "assessment_timestamp"       // Timestamp do último salva
+}
+```
+
+### Recuperação Automática
+
+O módulo tenta recuperar a avaliação anterior ao iniciar:
+
+```javascript
+// Automático - mostrar notificação se houver dados salvos
+recoverPreviousAssessment();
+// ✅ Mostra: "📋 Avaliação anterior recuperada (12/02/2026 14:30)"
+```
+
+### API de Storage Manual
+
+```javascript
+// Salvar dados manualmente
+const saveResult = saveAssessmentData();
+if (saveResult.success) {
+    console.log('Dados salvos com sucesso');
+}
+
+// Carregar dados manualmente
+const loadResult = loadAssessmentData();
+if (loadResult.success) {
+    console.log('Dados carregados:', loadResult.data);
+    console.log('Último salvamento:', loadResult.lastSaved);
+}
+
+// Limpar dados (útil ao reiniciar)
+const clearResult = clearAssessmentData();
+if (clearResult.success) {
+    console.log('Dados limpos');
+}
+```
+
+### Sincronização DOM ↔️ AppState (FASE 2)
+
+```javascript
+// Sincronizar formulário → AppState
+syncFormToState();
+
+// Sincronizar AppState → DOM campos específicos
+syncStateToDOM(AppState.userData, ['weight', 'height', 'age']);
+
+// Sincronizar de/para objetos genéricos
+syncDOMToState(source, target);
+syncStateToDOM(source, ['field1', 'field2']);
+```
+
+### Estrutura de Dados Salva
+
+```javascript
+{
+    currentScreen: "welcome-screen",
+    currentPhotoStep: 0,
+    photosCaptured: {
+        front: true,
+        back: false,
+        sideLeft: false,
+        sideRight: false
+    },
+    userData: {
+        weight: 75.5,
+        height: 175,
+        age: 30,
+        gender: "male",
+        activityLevel: "moderate",
+        goal: "muscle-gain"
+    },
+    analysisResults: { /* ... */ },
+    timestamp: "2026-02-24T14:30:00.000Z"
+}
+```
+
+**Nota:** Fotos em base64 NÃO são salvas (muito grandes). Use `photosCaptured` para rastrear quais foram feitas.
+
+---
+
 ## 📊 Integração com Planos de Treino
 
 ```javascript

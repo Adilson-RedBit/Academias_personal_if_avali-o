@@ -1,6 +1,14 @@
 // ==========================================
 // ESTADO DA APLICAÇÃO
 // ==========================================
+const STORAGE_PREFIX = 'assessment_'; // Prefixo seguro para dados
+const STORAGE_KEYS = {
+    appState: STORAGE_PREFIX + 'state',
+    userData: STORAGE_PREFIX + 'user',
+    analysisResults: STORAGE_PREFIX + 'results',
+    lastSaved: STORAGE_PREFIX + 'timestamp'
+};
+
 const AppState = {
     currentScreen: 'welcome-screen',
     currentPhotoStep: 0,
@@ -171,6 +179,147 @@ function showSuccessMessage(message) {
 }
 
 // ==========================================
+// SINCRONIZAÇÃO DOM ↔️ APPSTATE - FASE 2
+// ==========================================
+
+/**
+ * Sincroniza dados do DOM para AppState
+ * @param {Object} source - Dados a sincronizar
+ * @param {Object} target - AppState ou userData
+ */
+function syncDOMToState(source, target) {
+    Object.keys(source).forEach(key => {
+        if (source[key] !== undefined && source[key] !== null) {
+            target[key] = source[key];
+        }
+    });
+}
+
+/**
+ * Sincroniza dados do AppState para DOM
+ * @param {Object} state - Dados do AppState
+ * @param {string[]} fields - Campos a sincronizar
+ */
+function syncStateToDOM(state, fields) {
+    fields.forEach(fieldName => {
+        const element = document.getElementById(`input-${fieldName}`);
+        if (element && state[fieldName] !== undefined) {
+            if (element.type === 'radio' || element.type === 'checkbox') {
+                document.querySelector(`input[name="${fieldName}"][value="${state[fieldName]}"]`).checked = true;
+            } else {
+                element.value = state[fieldName];
+            }
+        }
+    });
+}
+
+/**
+ * Sincroniza todos os dados do formulário complementar para AppState
+ */
+function syncFormToState() {
+    const formData = {
+        weight: parseFloat(document.getElementById('input-weight').value),
+        height: parseInt(document.getElementById('input-height').value),
+        age: parseInt(document.getElementById('input-age').value),
+        gender: document.querySelector('input[name="gender"]:checked')?.value || '',
+        activityLevel: document.getElementById('input-activity')?.value || '',
+        goal: document.getElementById('input-goal')?.value || ''
+    };
+    
+    syncDOMToState(formData, AppState.userData);
+}
+
+// ==========================================
+// STORAGE SEGURO - FASE 2
+// ==========================================
+
+/**
+ * Salva dados no localStorage (apenas dados, não fotos em base64)
+ * Fotos em base64 são muito grandes, então salvamos apenas metadados
+ */
+function saveAssessmentData() {
+    try {
+        const dataToSave = {
+            currentScreen: AppState.currentScreen,
+            currentPhotoStep: AppState.currentPhotoStep,
+            photosCaptured: {
+                front: AppState.photos.front !== null,
+                back: AppState.photos.back !== null,
+                sideLeft: AppState.photos.sideLeft !== null,
+                sideRight: AppState.photos.sideRight !== null
+            },
+            userData: AppState.userData,
+            analysisResults: AppState.analysisResults,
+            timestamp: new Date().toISOString()
+        };
+        
+        localStorage.setItem(STORAGE_KEYS.appState, JSON.stringify(dataToSave));
+        localStorage.setItem(STORAGE_KEYS.lastSaved, new Date().getTime().toString());
+        
+        return { success: true };
+    } catch (error) {
+        console.error('Erro ao salvar dados:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Carrega dados do localStorage
+ */
+function loadAssessmentData() {
+    try {
+        const savedData = localStorage.getItem(STORAGE_KEYS.appState);
+        if (!savedData) return { success: false, data: null };
+        
+        const data = JSON.parse(savedData);
+        const lastSaved = localStorage.getItem(STORAGE_KEYS.lastSaved);
+        
+        // Restaurar state (exceto fotos em base64, que serão null)
+        AppState.currentScreen = data.currentScreen || 'welcome-screen';
+        AppState.currentPhotoStep = data.currentPhotoStep || 0;
+        AppState.userData = data.userData || {};
+        AppState.analysisResults = data.analysisResults || null;
+        
+        return {
+            success: true,
+            data: data,
+            lastSaved: lastSaved ? new Date(parseInt(lastSaved)).toLocaleString('pt-BR') : 'Desconhecido'
+        };
+    } catch (error) {
+        console.error('Erro ao carregar dados:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Limpa dados do localStorage (após completar avaliação ou reiniciar)
+ */
+function clearAssessmentData() {
+    try {
+        Object.values(STORAGE_KEYS).forEach(key => {
+            localStorage.removeItem(key);
+        });
+        return { success: true };
+    } catch (error) {
+        console.error('Erro ao limpar dados:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Recupera avaliação anterior (se houver)
+ * Mostra aviso ao usuário se dados foram restaurados
+ */
+function recoverPreviousAssessment() {
+    const loadResult = loadAssessmentData();
+    if (loadResult.success && loadResult.data) {
+        showSuccessMessage(`📋 Avaliação anterior recuperada (${loadResult.lastSaved})`);
+        return true;
+    }
+    return false;
+}
+
+// ==========================================
 // NAVEGAÇÃO ENTRE TELAS
 // ==========================================
 function goToScreen(screenId) {
@@ -196,9 +345,12 @@ function startAssessment() {
 function restartAssessment() {
     // Reset completo
     AppState.currentPhotoStep = 0;
-    AppState.photos = { front: null, back: null, side: null };
+    AppState.photos = { front: null, back: null, sideLeft: null, sideRight: null };
     AppState.userData = {};
     AppState.analysisResults = null;
+
+    // Limpar dados do storage - FASE 2
+    clearAssessmentData();
 
     goToScreen('welcome-screen');
 }
@@ -294,15 +446,8 @@ document.addEventListener('DOMContentLoaded', () => {
     form.addEventListener('submit', (e) => {
         e.preventDefault();
 
-        // Coletar dados do formulário
-        AppState.userData = {
-            weight: parseFloat(document.getElementById('input-weight').value),
-            height: parseInt(document.getElementById('input-height').value),
-            age: parseInt(document.getElementById('input-age').value),
-            gender: document.querySelector('input[name="gender"]:checked').value,
-            activityLevel: document.getElementById('input-activity').value,
-            goal: document.getElementById('input-goal').value
-        };
+        // Sincronizar dados do DOM para AppState - FASE 2
+        syncFormToState();
 
         // VALIDAÇÃO - FASE 1
         const validation = validateUserData();
@@ -311,9 +456,18 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Salvar dados antes de processar - FASE 2
+        const saveResult = saveAssessmentData();
+        if (!saveResult.success) {
+            console.warn('Aviso: Dados não foram salvos localmente');
+        }
+
         // Simular análise (mostrar loading e depois resultados)
         showLoadingAndAnalyze();
     });
+    
+    // Tentar recuperar avaliação anterior - FASE 2
+    recoverPreviousAssessment();
     
     // Setup para captura de fotos com validação - FASE 1
     setupPhotoCapture();
