@@ -471,7 +471,89 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Setup para captura de fotos com validação - FASE 1
     setupPhotoCapture();
+    
+    // Setup de navegação por teclado - FASE 3
+    setupKeyboardNavigation();
 });
+
+/**
+ * Setup de navegação por teclado - FASE 3
+ * Suporta: Escape (voltar), Enter (confirmar)
+ */
+function setupKeyboardNavigation() {
+    document.addEventListener('keydown', (e) => {
+        // Escape - voltar para tela anterior
+        if (e.key === 'Escape') {
+            const currentScreen = document.querySelector('.screen.active');
+            
+            // Não voltar da tela de boas-vindas
+            if (currentScreen?.id === 'welcome-screen') {
+                return;
+            }
+            
+            // Voltar para foto anterior (se estiver capturando)
+            if (currentScreen?.id === 'photo-screen' && AppState.currentPhotoStep > 0) {
+                AppState.currentPhotoStep--;
+                updatePhotoStep();
+            }
+            // Voltar para captura de fotos (se estiver preenchendo formulário)
+            else if (currentScreen?.id === 'complementary-data-screen') {
+                goToScreen('photo-screen');
+            }
+            // Voltar para foto screen (se estiver vendo resultados)
+            else if (currentScreen?.id === 'results-screen') {
+                restartAssessment();
+            }
+        }
+        
+        // Enter - confirmar ação em certos contextos
+        if (e.key === 'Enter' && e.ctrlKey) {
+            const form = document.getElementById('complementary-data-form');
+            if (form && !e.target.matches('textarea')) {
+                form.dispatchEvent(new Event('submit'));
+            }
+        }
+    });
+    
+    // Anunciar mudanças de tela para screen readers
+    const observer = new MutationObserver(() => {
+        const activeScreen = document.querySelector('.screen.active');
+        if (activeScreen) {
+            const title = activeScreen.querySelector('h1, h2');
+            if (title) {
+                announceToScreenReader(title.textContent);
+            }
+        }
+    });
+    
+    const appContainer = document.querySelector('.app-container');
+    if (appContainer) {
+        observer.observe(appContainer, { attributes: true, subtree: true });
+    }
+}
+
+/**
+ * Anunciar mudanças para screen readers - FASE 3
+ */
+function announceToScreenReader(message) {
+    const announcement = document.createElement('div');
+    announcement.setAttribute('role', 'status');
+    announcement.setAttribute('aria-live', 'polite');
+    announcement.setAttribute('aria-atomic', 'true');
+    announcement.style.position = 'absolute';
+    announcement.style.left = '-10000px';
+    announcement.style.width = '1px';
+    announcement.style.height = '1px';
+    announcement.style.overflow = 'hidden';
+    announcement.textContent = message;
+    
+    document.body.appendChild(announcement);
+    
+    // Remover após anúncio
+    setTimeout(() => {
+        document.body.removeChild(announcement);
+    }, 1000);
+}
 
 /**
  * Setup de captura de fotos com validação
